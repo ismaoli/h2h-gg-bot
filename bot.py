@@ -21,14 +21,26 @@ def log(msg):
 # ----------------------------------------------------------
 def buscar_partidas():
     try:
-        resposta = requests.get(API_URL, timeout=10)
+        resposta = requests.get(API_URL, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            "Accept": "application/json,text/plain,*/*"
+        })
+
+        # Se retornar JSON válido
+        try:
+            return resposta.json()
+        except:
+            pass  # se não for JSON, continua abaixo
+
         dados = resposta.text
 
-        if "<html" in dados.lower():
-            log("❌ Erro: O site retornou HTML (bloqueio ou mudança de layout).")
+        # Se tiver HTML, provavelmente é um bloqueio
+        if "<html" in dados.lower() or "<!doctype" in dados.lower():
+            log("⚠️ Alerta: O site devolveu HTML (possível bloqueio ou mudança). Tentando novamente em 1 minuto…")
+            sleep(60)
             return None
 
-        log("✔ Dados coletados do site com sucesso.")
+        log("✔ Dados coletados com sucesso (texto bruto).")
         return dados
 
     except Exception as e:
