@@ -1,112 +1,95 @@
-import time
 import requests
 import json
-import os
-import traceback
+from time import sleep
 from datetime import datetime
 
-# ----------------------------------------------------------
-# CONFIGURAÇÕES
-# ----------------------------------------------------------
+# ===============================
+# CONFIGURAÇÕES DO BOT
+# ===============================
+
 API_URL = "https://mgxdwsgbyepaasqjf6cao4qnq40zjpih.lambda-url.eu-west-1.on.aws/fifa?limit=15"
-INTERVALO = 20  # segundos entre cada consulta
-LOG = True
+INTERVALO = 30  # segundos entre cada consulta
+
+
+# ===============================
+# SISTEMA DE LOG
+# ===============================
 
 def log(msg):
-    if LOG:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+    hora = datetime.now().strftime("%H:%M:%S")
+    print(f"[{hora}] {msg}", flush=True)
 
-# ----------------------------------------------------------
-# FUNÇÃO PARA BUSCAR DADOS DO SITE
-# ----------------------------------------------------------
+
+# ===============================
+# BUSCAR PARTIDAS DA API
+# ===============================
+
 def buscar_partidas():
     try:
         resposta = requests.get(API_URL, timeout=10, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            "Accept": "application/json,text/plain,*/*"
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
         })
 
-        # Se retornar JSON válido
-        try:
-            return resposta.json()
-        except:
-            pass  # se não for JSON, continua abaixo
-
-        dados = resposta.text
-
-        # Se tiver HTML, provavelmente é um bloqueio
-        if "<html" in dados.lower() or "<!doctype" in dados.lower():
-            log("⚠️ Alerta: O site devolveu HTML (possível bloqueio ou mudança). Tentando novamente em 1 minuto…")
+        # Verifica se a resposta é JSON
+        content_type = resposta.headers.get("Content-Type", "")
+        if "application/json" not in content_type:
+            log("⚠️ Alerta: A resposta não é JSON (instabilidade no site). Tentando novamente em 60s…")
             sleep(60)
             return None
 
-        log("✔ Dados coletados com sucesso (texto bruto).")
+        dados = resposta.json()
+        log("✔ Dados coletados com sucesso.")
         return dados
 
     except Exception as e:
         log(f"❌ Erro ao buscar dados: {e}")
+        sleep(60)
         return None
 
-# ----------------------------------------------------------
-# PROCESSAMENTO DO MODELO (Simples por enquanto)
-# ----------------------------------------------------------
-def processar_dados(bruto):
-    """
-    Aqui você coloca sua lógica real:
-    - Extrair estatísticas
-    - Calcular padrões
-    - Encontrar valor
-    - Ler odds
-    - Criar predições
-    """
 
-    # Mock simples só para testar o loop
+# ===============================
+# ANALISAR PARTIDAS
+# ===============================
+
+def analisar_partidas(dados):
     try:
-        log("🔎 Processando dados brutos… (mock)")
-        return {"ok": True}
+        if not isinstance(dados, list):
+            log("⚠️ Formato inesperado de dados. Aguardando...")
+            return
+
+        for partida in dados:
+            home = partida.get("home")
+            away = partida.get("away")
+            score_home = partida.get("home_score")
+            score_away = partida.get("away_score")
+
+            log(f"📊 {home} {score_home} x {score_away} {away}")
 
     except Exception as e:
-        log(f"❌ Erro ao processar dados: {e}")
-        return None
+        log(f"❌ Erro ao analisar partidas: {e}")
 
-# ----------------------------------------------------------
-# LOOP PRINCIPAL
-# ----------------------------------------------------------
-def loop_bot():
+
+# ===============================
+# LOOP PRINCIPAL DO BOT
+# ===============================
+
+def loop_principal():
     log("🚀 BOT INICIADO COM SUCESSO!")
-    log("🔄 Rodando em loop contínuo...")
+    log("🔄 Rodando em loop contínuo...\n")
 
     while True:
-        try:
-            # 1. Buscar dados
-            dados = buscar_partidas()
+        dados = buscar_partidas()
+        
+        if dados:
+            analisar_partidas(dados)
 
-            if dados:
-                # 2. Processar dados
-                processar_dados(dados)
+        sleep(INTERVALO)
 
-            # Aguardar próximo ciclo
-            time.sleep(INTERVALO)
 
-        except Exception as e:
-            log("🔥 ERRO NO LOOP PRINCIPAL:")
-            log(traceback.format_exc())
-            time.sleep(5)
+# ===============================
+# INICIAR BOT
+# ===============================
 
-# ----------------------------------------------------------
-# CLI
-# ----------------------------------------------------------
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--run", action="store_true", help="Executar loop principal")
-    parser.add_argument("--train", type=str, help="Treinar modelo")
-    parser.add_argument("--features", type=str, help="Dump de features")
-
-    args = parser.parse_args()
-
-    if args.run:
-        loop_bot()
-    else:
-        print("Use: python bot.py --run")
+    loop_principal()
