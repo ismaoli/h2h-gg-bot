@@ -8,7 +8,7 @@ from datetime import datetime
 # ----------------------------------------------------------
 # CONFIGURAÇÕES
 # ----------------------------------------------------------
-API_URL = "https://h2hggl.com/en/esoccer"
+API_URL = "https://mgxdwsgbyepaasqjf6cao4qnq40zjpih.lambda-url.eu-west-1.on.aws/fifa?limit=15"
 INTERVALO = 20  # segundos entre cada consulta
 LOG = True
 
