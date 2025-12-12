@@ -1,95 +1,83 @@
 import requests
-import json
-from time import sleep
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+import os
 
-# ===============================
-# CONFIGURAÇÕES DO BOT
-# ===============================
+# ================= CONFIGURAÇÃO =================
+TELEGRAM_TOKEN = "8352928985:AAFbZ8nQ3lKLkybp01givi4zHT4kkf0k4mw"
+CHAT_ID = "1855511248"  # SEU CHAT_ID do Telegram
 
-API_URL = "https://mgxdwsgbyepaasqjf6cao4qnq40zjpih.lambda-url.eu-west-1.on.aws/fifa?limit=15"
-INTERVALO = 30  # segundos entre cada consulta
+# URL da API H2H GG
+API_URL = "https://mgxdwsgbyepaasqjf6cao4qnq40zjpih.lambda-url.eu-west-1.on.aws/fifa?limit=50"
 
+# ================= FUNÇÕES =================
 
-# ===============================
-# SISTEMA DE LOG
-# ===============================
+# Envia mensagem para Telegram
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-def log(msg):
-    hora = datetime.now().strftime("%H:%M:%S")
-    print(f"[{hora}] {msg}", flush=True)
-
-
-# ===============================
-# BUSCAR PARTIDAS DA API
-# ===============================
-
-def buscar_partidas():
+# Busca partidas da API
+def get_matches():
     try:
-        resposta = requests.get(API_URL, timeout=10, headers={
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        })
-
-        # Verifica se a resposta é JSON
-        content_type = resposta.headers.get("Content-Type", "")
-        if "application/json" not in content_type:
-            log("⚠️ Alerta: A resposta não é JSON (instabilidade no site). Tentando novamente em 60s…")
-            sleep(60)
-            return None
-
-        dados = resposta.json()
-        log("✔ Dados coletados com sucesso.")
-        return dados
-
+        r = requests.get(API_URL, timeout=10)
+        return r.json()
     except Exception as e:
-        log(f"❌ Erro ao buscar dados: {e}")
-        sleep(60)
-        return None
+        print(f"Erro ao buscar partidas: {e}")
+        return []
 
+# Verifica se a partida começa em X minutos
+def match_starts_soon(match, minutes=5):
+    start = datetime.fromisoformat(match["start_time"].replace("Z", "+00:00"))
+    now = datetime.utcnow()
+    diff = start - now
+    return 0 <= diff.total_seconds() <= (minutes*60)
 
-# ===============================
-# ANALISAR PARTIDAS
-# ===============================
+# Analisa a partida e define a melhor entrada
+def analyze_match(match):
+    home, away = match["home"], match["away"]
 
-def analisar_partidas(dados):
-    try:
-        if not isinstance(dados, list):
-            log("⚠️ Formato inesperado de dados. Aguardando...")
-            return
+    # ================== LÓGICA DE ANÁLISE ==================
+    # Aqui você pode expandir usando histórico real ou estatísticas
+    # Por enquanto valores simulados:
+    btts = 77      # chance de Ambas Marcam (%)
+    over_1_5 = 65  # chance de over 1.5 (%)
+    under_2_5 = 100 - over_1_5
 
-        for partida in dados:
-            home = partida.get("home")
-            away = partida.get("away")
-            score_home = partida.get("home_score")
-            score_away = partida.get("away_score")
+    # Escolhe melhor entrada
+    melhor = "Ambas Marcam" if btts > over_1_5 else "Over 1,5"
 
-            log(f"📊 {home} {score_home} x {score_away} {away}")
+    # Monta mensagem
+    msg = (
+        f"⚽ Partida em 5 min!\n"
+        f"{home} x {away}\n"
+        f"⏱ Início: {match['start_time']}\n"
+        f"📊 Ambas Marcam: {btts}%\n"
+        f"📊 Over 1,5: {over_1_5}%\n"
+        f"📊 Under 2,5: {under_2_5}%\n"
+        f"✅ MELHOR ENTRADA: {melhor}"
+    )
+    return msg
 
-    except Exception as e:
-        log(f"❌ Erro ao analisar partidas: {e}")
-
-
-# ===============================
-# LOOP PRINCIPAL DO BOT
-# ===============================
-
-def loop_principal():
-    log("🚀 BOT INICIADO COM SUCESSO!")
-    log("🔄 Rodando em loop contínuo...\n")
+# ================= LOOP PRINCIPAL =================
+def main():
+    notified = set()
+    send_telegram("🤖 Bot iniciado e monitorando próximas partidas...")
 
     while True:
-        dados = buscar_partidas()
-        
-        if dados:
-            analisar_partidas(dados)
+        matches = get_matches()
+        for m in matches:
+            mid = m.get("external_id")
+            if mid in notified:
+                continue
 
-        sleep(INTERVALO)
+            if match_starts_soon(m):
+                msg = analyze_match(m)
+                send_telegram(msg)
+                notified.add(mid)
 
+        time.sleep(60)  # checa a cada minuto
 
-# ===============================
-# INICIAR BOT
-# ===============================
-
+# ================= INÍCIO =================
 if __name__ == "__main__":
-    loop_principal()
+    main()
